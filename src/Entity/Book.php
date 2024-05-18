@@ -2,12 +2,17 @@
 
 namespace App\Entity;
 
-use App\Repository\BookRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use App\Repository\BookRepository;
+use Symfony\Component\String\Slugger\SluggerInterface;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 
 #[ORM\Entity(repositoryClass: BookRepository::class)]
-class Book
+#[ORM\HasLifecycleCallbacks]
+#[UniqueEntity('slug')]
+class Book implements \Stringable
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -20,7 +25,7 @@ class Book
     #[ORM\Column(length: 255)]
     private ?string $author = null;
 
-    #[ORM\Column(length: 4, nullable: true)]
+    #[ORM\Column(length: 255, nullable: true)]
     private ?string $publication = null;
 
     #[ORM\Column(length: 255)]
@@ -33,7 +38,7 @@ class Book
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
-    private ?\DateTimeImmutable $UpdateAt = null;
+    private ?\DateTimeImmutable $UpdatedAt = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $description = null;
@@ -41,11 +46,23 @@ class Book
     #[ORM\Column(type: Types::SIMPLE_ARRAY, nullable: true)]
     private ?array $genre = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, unique: true)]
     private ?string $slug = null;
 
     #[ORM\ManyToOne(inversedBy: 'books')]
-    private ?user $username = null;
+    private ?User $username = null;
+
+    public function __toString(): string
+    {
+        return $this->title . ' ' . $this->author;
+    }
+
+    public function computeSlug(SluggerInterface $slugger)
+    {
+        if (!$this->slug || '-' === $this->slug) {
+            $this->slug = (string) $slugger->slug((string) $this->title . '-' . $this->author . '-' . $this->username)->lower();
+        }
+    }
 
     public function getId(): ?int
     {
@@ -108,7 +125,6 @@ class Book
     public function setImage(?string $image): static
     {
         $this->image = $image;
-
         return $this;
     }
 
@@ -124,18 +140,29 @@ class Book
         return $this;
     }
 
-    public function getUpdateAt(): ?\DateTimeImmutable
+    #[ORM\PrePersist]
+    public function setCreatedAtValue()
     {
-        return $this->UpdateAt;
+        $this->createdAt = new \DateTimeImmutable();
     }
 
-    public function setUpdateAt(?\DateTimeImmutable $UpdateAt): static
+    public function getUpdatedAt(): ?\DateTimeImmutable
     {
-        $this->UpdateAt = $UpdateAt;
+        return $this->UpdatedAt;
+    }
+
+    public function setUpdatedAt(?\DateTimeImmutable $UpdateAt): static
+    {
+        $this->UpdatedAt = $UpdateAt;
 
         return $this;
     }
 
+    #[ORM\PreUpdate]
+    public function setupdatedAtValue()
+    {
+        $this->UpdatedAt = new \DateTimeImmutable();
+    }
 
     public function getDescription(): ?string
     {
@@ -173,12 +200,12 @@ class Book
         return $this;
     }
 
-    public function getUsername(): ?user
+    public function getUsername(): ?User
     {
         return $this->username;
     }
 
-    public function setUsername(?user $username): static
+    public function setUsername(?User $username): static
     {
         $this->username = $username;
 
